@@ -8,12 +8,12 @@ import { join } from "node:path"
 const USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
 const REFRESH_MS = 60_000
 const WINDOWS = [
-  ["rolling", "5h"],
-  ["weekly", "weekly"],
-  ["monthly", "monthly"],
+  ["rolling", "5-HOUR"],
+  ["weekly", "WEEKLY"],
+  ["monthly", "MONTHLY"],
 ]
-const WAVE_CELLS = 10
-const WAVE_LEVELS = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588"]
+const BAR_CELLS = 20
+const PARTIAL_STEPS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
 const LABEL_WIDTH = 7
 
 function readGoKey() {
@@ -39,18 +39,17 @@ async function fetchUsage(apiKey, signal) {
 }
 
 function meter(percent) {
-  // Rising wave: each cell's height tracks how much of the window is
-  // consumed at that cell, cresting at the current frontier. Empty
-  // cells sit at "sea level" (▁) so the meter reads even at 0%.
-  const filled = ((percent ?? 0) / 100) * WAVE_CELLS
-  let wave = ""
-  for (let i = 0; i < WAVE_CELLS; i++) {
-    const height = Math.max(0, Math.min(1, filled - i))
-    let level = Math.floor(height * WAVE_LEVELS.length)
-    if (height > 0) level = Math.max(1, level) // always show a visible step at the crest
-    wave += WAVE_LEVELS[Math.min(WAVE_LEVELS.length - 1, level)]
-  }
-  return wave
+  // Flat omarchy-style bar: solid `█` fill on an empty track, with a
+  // stepped partial-block character at the fill frontier so the edge
+  // resolves finer than one cell. Plain string child on a single text
+  // node — no nested text spans.
+  const cells = ((percent ?? 0) / 100) * BAR_CELLS
+  const full = Math.floor(cells)
+  const rem = cells - full
+  const step = rem > 0 ? Math.max(1, Math.round(rem * (PARTIAL_STEPS.length - 1))) : 0
+  return "█".repeat(full) +
+    (step ? PARTIAL_STEPS[step] : "") +
+    " ".repeat(Math.max(0, BAR_CELLS - full - (step ? 1 : 0)))
 }
 
 function colorFor(theme, percent) {
@@ -121,6 +120,9 @@ export default Plugin.define({
                           children: [
                             jsx("box", {
                               width: LABEL_WIDTH,
+                              height: 3,
+                              justifyContent: "center",
+                              alignItems: "flex-start",
                               children: [
                                 jsx("text", {
                                   children: label,
@@ -130,9 +132,23 @@ export default Plugin.define({
                                 }),
                               ],
                             }),
+                            jsx("box", {
+                              border: true,
+                              width: BAR_CELLS + 2,
+                              children: [
+                                jsx("text", {
+                                  get children() {
+                                    return meter(usage()?.[key]?.percent)
+                                  },
+                                  get fg() {
+                                    return color()
+                                  },
+                                }),
+                              ],
+                            }),
                             jsx("text", {
                               get children() {
-                                return `${meter(usage()?.[key]?.percent)} ${usage()?.[key]?.percent ?? "–"}%`
+                                return `${usage()?.[key]?.percent ?? "–"}%`
                               },
                               get fg() {
                                 return color()
