@@ -1,0 +1,26 @@
+{
+  "name": "opencode-go-limits-tracker",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Track your OpenCode Go plan limits (5h, weekly, monthly) live in the OpenCode V2 sidebar",
+  "exports": {
+    ".": "./index.ts",
+    "./tui": "./tui.ts"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "opencode-go",
+    "tui",
+    "usage",
+    "quota",
+    "limits",
+    "tracker",
+    "rate-limit",
+    "sidebar"
+  ],
+  "license": "MIT",
+  "engines": {
+    "opencode": ">=2.0.0"
+  }
+}
