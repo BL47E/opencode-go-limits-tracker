@@ -29,7 +29,7 @@ bundled runtime — don't add imports that require `npm install`).
 
 - Edit `tui.ts` (the `index.ts` file is only the generic entry point).
 - Restart the TUI after each change — there is no hot reload for plugins.
-- Check `~/.local/share/opencode/log/opencode.log` (filter `role=cli`) if the banner
+- Check `~/.local/share/opencode/log/opencode.log` (filter `role=cli`) if the panel
   silently disappears or the plugin errors on startup.
 
 ## Code style
@@ -43,7 +43,7 @@ bundled runtime — don't add imports that require `npm install`).
 
 - A config knob for `REFRESH_MS` (e.g., read from `cli.json`)
 - Handling of fractional percents if the endpoint starts returning them
-- A "hidden when sidebar is off" fallback note or banner position option
+- A "hidden when sidebar is off" fallback note or panel position option
 
 ## Test checklist (manual)
 

@@ -89,7 +89,7 @@ Verify it was discovered:
 opencode plugin list
 ```
 
-You should see `opencode-go-usage-sidebar` listed with source `local`.
+You should see `opencode-go-limits-tracker` listed with source `local`.
 
 ## Requirements
 
