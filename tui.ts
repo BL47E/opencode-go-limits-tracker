@@ -9,9 +9,12 @@ const USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
 const REFRESH_MS = 60_000
 const WINDOWS = [
   ["rolling", "5h"],
-  ["weekly", "week"],
-  ["monthly", "month"],
+  ["weekly", "weekly"],
+  ["monthly", "monthly"],
 ]
+const WAVE_CELLS = 10
+const WAVE_LEVELS = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588"]
+const LABEL_WIDTH = 7
 
 function readGoKey() {
   try {
@@ -33,6 +36,21 @@ async function fetchUsage(apiKey, signal) {
   if (!res.ok) throw new Error(`usage endpoint returned ${res.status}`)
   const data = await res.json()
   return data?.usage ?? null
+}
+
+function meter(percent) {
+  // Rising wave: each cell's height tracks how much of the window is
+  // consumed at that cell, cresting at the current frontier. Empty
+  // cells sit at "sea level" (▁) so the meter reads even at 0%.
+  const filled = ((percent ?? 0) / 100) * WAVE_CELLS
+  let wave = ""
+  for (let i = 0; i < WAVE_CELLS; i++) {
+    const height = Math.max(0, Math.min(1, filled - i))
+    let level = Math.floor(height * WAVE_LEVELS.length)
+    if (height > 0) level = Math.max(1, level) // always show a visible step at the crest
+    wave += WAVE_LEVELS[Math.min(WAVE_LEVELS.length - 1, level)]
+  }
+  return wave
 }
 
 function colorFor(theme, percent) {
@@ -79,50 +97,52 @@ export default Plugin.define({
             },
             get children() {
               return jsx("box", {
-                flexDirection: "row",
-                gap: 1,
+                flexDirection: "column",
                 paddingLeft: 2,
                 paddingRight: 2,
                 paddingTop: 1,
+                gap: 1,
                 get children() {
-                  const u = usage()
-                  const nodes = []
-                  WINDOWS.forEach(([key, label], index) => {
-                    if (index > 0)
-                      nodes.push(
-                        jsx("text", {
-                          children: "·",
-                          get fg() {
-                            return context.theme?.text?.muted
-                          },
-                        }),
-                      )
-                    nodes.push(
-                      jsx("text", {
-                        get children() {
-                          return `${label} ${usage()?.[key]?.percent ?? "–"}%`
-                        },
-                        get fg() {
-                          return colorFor(context.theme, usage()?.[key]?.percent)
-                        },
-                      }),
-                      jsx("text", {
-                        children: "◆",
-                        get fg() {
-                          return colorFor(context.theme, usage()?.[key]?.percent)
-                        },
-                      }),
-                    )
-                  })
-                  nodes.unshift(
+                  return [
                     jsx("text", {
-                      children: "Go",
+                      children: "Opencode Go",
                       get fg() {
                         return context.theme?.text?.base
                       },
                     }),
-                  )
-                  return nodes
+                    jsx("box", {
+                      flexDirection: "column",
+                      gap: 1,
+                      children: WINDOWS.map(([key, label]) => {
+                        const color = () => colorFor(context.theme, usage()?.[key]?.percent)
+                        return jsx("box", {
+                          flexDirection: "row",
+                          gap: 1,
+                          children: [
+                            jsx("box", {
+                              width: LABEL_WIDTH,
+                              children: [
+                                jsx("text", {
+                                  children: label,
+                                  get fg() {
+                                    return context.theme?.text?.muted
+                                  },
+                                }),
+                              ],
+                            }),
+                            jsx("text", {
+                              get children() {
+                                return `${meter(usage()?.[key]?.percent)} ${usage()?.[key]?.percent ?? "–"}%`
+                              },
+                              get fg() {
+                                return color()
+                              },
+                            }),
+                          ],
+                        })
+                      }),
+                    }),
+                  ]
                 },
               })
             },
