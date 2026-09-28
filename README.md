@@ -7,12 +7,25 @@
 An [OpenCode](https://opencode.ai) **V2** TUI plugin that tracks your **OpenCode Go** plan limits in the **sidebar footer** — the rolling **5h**, **weekly**, and **monthly** windows.
 
 ```text
-Go 5h 1% ◆ · week 2% ◆ · month 51% ◆
+  Opencode Go
+
+  5-HOUR  █████░░░░░░░░░░░░░░░░  1% · 3h12m
+  WEEKLY  █░░░░░░░░░░░░░░░░░░░░  2% · 3d
+  MONTHLY ██████████░░░░░░░░░░░  51% · 21d
 ```
 
-The diamond after each value is tinted green, yellow, or red by that window's own usage level.
-The banner appears **only while the active session's model runs on the OpenCode Go provider**;
-switch providers and it disappears.
+Each row is a solid omarchy-style progress bar (with a boxed border in the TUI and a fine
+partial-cell fill edge), tinted green, yellow, or red by that window's usage level, followed
+by the exact percentage and a countdown until that window resets. The panel appears **only
+while the active session's model runs on the OpenCode Go provider**; switch providers and it
+disappears.
+
+Prefer a single line? Set `COMPACT = true` in `tui.ts`:
+
+```text
+  Opencode Go
+  5h 1% · wk 2% · mo 51% ↻3h12m
+```
 
 Tested against OpenCode **2.0.18**.
 
@@ -33,11 +46,14 @@ lands natively, this plugin fills the gap.
 ## Features
 
 - Shows all three Go quota windows: **5h** (rolling), **week**, **month**
-- Per-window colored diamond: 🟢 green (<50%), 🟡 yellow (50–89%), 🔴 red (≥90%)
+- Omarchy-style progress bars: 20-cell solid fill with a stepped partial-cell edge, boxed in the TUI
+- Per-window coloring on the bar and its percent: 🟢 green (<50%), 🟡 yellow (50–89%), 🔴 red (≥90%)
+- **Reset countdowns** — `3h12m` for the 5h window, days/weeks for the week and month windows
+- **Compact single-line mode** — set `COMPACT = true` for `5h 1% · wk 2% · mo 51%`
 - Auto-gating: hidden unless the current session's provider is `opencode-go`
 - Refreshes every 60 seconds, plus after every completed session run
 - Zero configuration — reuses the Go key OpenCode already stores locally
-- Degrades silently: missing key, network failure, or rate limiting just hides the banner
+- Degrades silently: missing key, network failure, or rate limiting just hides the panel
 
 ## Install
 
@@ -58,14 +74,10 @@ git clone https://github.com/BL47E/opencode-go-limits-tracker.git \
 
 Copy this folder to `~/.config/opencode/plugins/go-usage` (any method you like).
 
-### Option 3 — register it explicitly in `cli.json`
+### Option 3 — install from npm (once published)
 
-Add the absolute path to `~/.config/opencode/cli.json`:
-
-```json
-{
-  "plugins": ["/absolute/path/to/opencode-go-usage-sidebar"]
-}
+```sh
+opencode plugin add opencode-go-limits-tracker
 ```
 
 ### Then restart the TUI
@@ -115,13 +127,14 @@ Response shape:
 - `rolling` → the 5-hour rolling window
 - `weekly` → resets at the start of each UTC week (`resetsAt` is a Monday 00:00 UTC)
 - `monthly` → resets on your billing-cycle anchor date
+- `resetsAt` on each window → shown next to the percent as a countdown (`3h12m`, `3d`, `21d`)
 
 No browser cookies, no page scraping, no database. Nothing is sent anywhere except to
 `opencode.ai`, and the key never leaves your machine.
 
 ## Colors
 
-Each window's diamond (and its percent value) is colored by that window alone:
+Each window's bar and percent value are colored by that window alone:
 
 | Color  | Condition       |
 | ------ | --------------- |
@@ -131,11 +144,20 @@ Each window's diamond (and its percent value) is colored by that window alone:
 
 ## Configuration
 
-There are no required options. Two constants at the top of `tui.ts` are easy to tweak:
+There are no required options. The constants at the top of `tui.ts` are easy to tweak:
 
 ```ts
 const USAGE_URL = "https://opencode.ai/zen/go/v1/usage" // data source
-const REFRESH_MS = 60_000                               // refresh interval
+const REFRESH_MS = 60_000                               // usage refresh interval
+const COMPACT = false                                   // true = one-line layout
+const TICK_MS = 30_000                                  // countdown recompute interval
+const WINDOWS = [                                       // order + labels per window
+  { key: "rolling", label: "5-HOUR", compact: "5h" },
+  { key: "weekly", label: "WEEKLY", compact: "wk" },
+  { key: "monthly", label: "MONTHLY", compact: "mo" },
+]
+const BAR_CELLS = 20                                    // bar width in cells
+const LABEL_WIDTH = 7                                   // label column width (stacked mode)
 ```
 
 The provider gate matches `providerID === "opencode-go"` in `activeProvider()` — if OpenCode
@@ -161,13 +183,11 @@ Then restart the TUI.
 
 ## Publishing notes (for maintainers)
 
-To publish to npm so others can `opencode plugin add <package>`, add the peer dependencies the
-docs recommend for CLI plugins:
+The npm-required peers are already declared in `package.json`:
 
 ```json
 {
   "peerDependencies": {
-    "@opencode/plugin": "latest",
     "@opentui/core": ">=0.5.8",
     "@opentui/solid": ">=0.5.8",
     "solid-js": ">=1.9.0"
@@ -175,9 +195,9 @@ docs recommend for CLI plugins:
 }
 ```
 
-For local-directory discovery (the install method above) no dependencies are needed —
-OpenCode resolves `@opencode/plugin/tui`, `@opentui/solid/jsx-runtime`, and `solid-js` from its
-own bundled runtime.
+`@opencode/plugin` stays a regular dependency; the rest are peers so that when the plugin is
+installed into an OpenCode checkout the TUI runtime satisfies them itself. Bump `version` and
+`npm publish` to make the plugin available via `opencode plugin add`.
 
 ## Credits
 
