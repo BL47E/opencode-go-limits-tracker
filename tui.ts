@@ -45,17 +45,17 @@ async function fetchUsage(apiKey, signal) {
 }
 
 function meter(percent) {
-  // Flat omarchy-style bar: solid `█` fill on an empty track, with a
+  // Borderless omarchy-style bar: solid `█` fill on a `░` track, with a
   // stepped partial-block character at the fill frontier so the edge
-  // resolves finer than one cell. Plain string child on a single text
-  // node — no nested text spans.
+  // resolves finer than one cell. Fill and track share one text node and
+  // one fg color — the shade glyphs read as a deeper tone of the fill.
   const cells = ((percent ?? 0) / 100) * BAR_CELLS
   const full = Math.floor(cells)
   const rem = cells - full
   const step = rem > 0 ? Math.max(1, Math.round(rem * (PARTIAL_STEPS.length - 1))) : 0
   return "█".repeat(full) +
     (step ? PARTIAL_STEPS[step] : "") +
-    " ".repeat(Math.max(0, BAR_CELLS - full - (step ? 1 : 0)))
+    "░".repeat(Math.max(0, BAR_CELLS - full - (step ? 1 : 0)))
 }
 
 function colorFor(theme, percent) {
@@ -120,31 +120,20 @@ export default Plugin.define({
           children: [
             jsx("box", {
               width: LABEL_WIDTH,
-              height: 3,
-              justifyContent: "center",
-              alignItems: "flex-start",
-              children: [
-                jsx("text", {
-                  children: window.label,
-                  get fg() {
-                    return context.theme?.text?.muted
-                  },
-                }),
-              ],
+              children: jsx("text", {
+                children: window.label,
+                get fg() {
+                  return context.theme?.text?.muted
+                },
+              }),
             }),
-            jsx("box", {
-              border: true,
-              width: BAR_CELLS + 2,
-              children: [
-                jsx("text", {
-                  get children() {
-                    return meter(usage()?.[window.key]?.percent)
-                  },
-                  get fg() {
-                    return colorFor(context.theme, usage()?.[window.key]?.percent)
-                  },
-                }),
-              ],
+            jsx("text", {
+              get children() {
+                return meter(usage()?.[window.key]?.percent)
+              },
+              get fg() {
+                return colorFor(context.theme, usage()?.[window.key]?.percent)
+              },
             }),
             jsx("text", {
               get children() {

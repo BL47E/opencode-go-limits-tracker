@@ -14,11 +14,11 @@ An [OpenCode](https://opencode.ai) **V2** TUI plugin that tracks your **OpenCode
   MONTHLY ██████░░░░░░  52% 23d
 ```
 
-Each row is a solid omarchy-style progress bar (with a boxed border in the TUI and a fine
-partial-cell fill edge), tinted green, yellow, or red by that window's usage level, followed
-by the exact percentage and a countdown until that window resets. The panel appears **only
-while the active session's model runs on the OpenCode Go provider**; switch providers and it
-disappears.
+Each row is a borderless omarchy-style progress bar — a solid fill on a dimmed track of the
+same hue, with a fine partial-cell fill edge — tinted green, yellow, or red by that window's
+usage level, followed by the exact percentage and a countdown until that window resets. The
+panel appears **only while the active session's model runs on the OpenCode Go provider**;
+switch providers and it disappears.
 
 Prefer a single line? Set `COMPACT = true` in `tui.ts`:
 
@@ -46,7 +46,7 @@ lands natively, this plugin fills the gap.
 ## Features
 
 - Shows all three Go quota windows: **5h** (rolling), **week**, **month**
-- Omarchy-style progress bars: 12-cell solid fill with a stepped partial-cell edge, boxed in the TUI
+- Omarchy-style progress bars: 12-cell solid fill on a dimmed track of the same hue, no border
 - Per-window coloring on the bar and its percent: 🟢 green (<50%), 🟡 yellow (50–89%), 🔴 red (≥90%)
 - **Reset countdowns** — `3h12m` for the 5h window, days/weeks for the week and month windows
 - **Compact single-line mode** — set `COMPACT = true` for `5h 1% · wk 2% · mo 51%`
