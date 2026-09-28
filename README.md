@@ -1,5 +1,9 @@
 # opencode-go-limits-tracker
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![OpenCode V2](https://img.shields.io/badge/OpenCode-V2-7c3aed)](https://opencode.ai)
+[![Platform: macOS \| Linux \| WSL](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey)](https://opencode.ai/docs)
+
 An [OpenCode](https://opencode.ai) **V2** TUI plugin that tracks your **OpenCode Go** plan limits in the **sidebar footer** — the rolling **5h**, **weekly**, and **monthly** windows.
 
 ```text
@@ -181,6 +185,11 @@ own bundled runtime.
   (MIT), the community plugin that pioneered the same idea for OpenCode 1.18's bottom bar.
   This project is a from-scratch V2 implementation targeting the sidebar instead.
 - Uses the official usage endpoint documented in OpenCode's Console API.
+
+## Contributing
+
+PRs welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev workflow and the
+manual test checklist.
 
 ## License
 
