@@ -18,7 +18,7 @@ const WINDOWS = [
   { key: "weekly", label: "WEEKLY", compact: "wk" },
   { key: "monthly", label: "MONTHLY", compact: "mo" },
 ]
-const BAR_CELLS = 20
+const BAR_CELLS = 12
 const PARTIAL_STEPS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
 const LABEL_WIDTH = 7
 
@@ -191,8 +191,8 @@ export default Plugin.define({
             get children() {
               return jsx("box", {
                 flexDirection: "column",
-                paddingLeft: 2,
-                paddingRight: 2,
+                paddingLeft: 1,
+                paddingRight: 1,
                 paddingTop: 1,
                 gap: 1,
                 get children() {

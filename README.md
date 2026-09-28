@@ -9,9 +9,9 @@ An [OpenCode](https://opencode.ai) **V2** TUI plugin that tracks your **OpenCode
 ```text
   Opencode Go
 
-  5-HOUR  █████░░░░░░░░░░░░░░░░  1% · 3h12m
-  WEEKLY  █░░░░░░░░░░░░░░░░░░░░  2% · 3d
-  MONTHLY ██████████░░░░░░░░░░░  51% · 21d
+  5-HOUR  ███░░░░░░░░░  1% 1h
+  WEEKLY  █░░░░░░░░░░░  5% 6d
+  MONTHLY ██████░░░░░░  52% 23d
 ```
 
 Each row is a solid omarchy-style progress bar (with a boxed border in the TUI and a fine
@@ -46,7 +46,7 @@ lands natively, this plugin fills the gap.
 ## Features
 
 - Shows all three Go quota windows: **5h** (rolling), **week**, **month**
-- Omarchy-style progress bars: 20-cell solid fill with a stepped partial-cell edge, boxed in the TUI
+- Omarchy-style progress bars: 12-cell solid fill with a stepped partial-cell edge, boxed in the TUI
 - Per-window coloring on the bar and its percent: 🟢 green (<50%), 🟡 yellow (50–89%), 🔴 red (≥90%)
 - **Reset countdowns** — `3h12m` for the 5h window, days/weeks for the week and month windows
 - **Compact single-line mode** — set `COMPACT = true` for `5h 1% · wk 2% · mo 51%`
@@ -156,7 +156,7 @@ const WINDOWS = [                                       // order + labels per wi
   { key: "weekly", label: "WEEKLY", compact: "wk" },
   { key: "monthly", label: "MONTHLY", compact: "mo" },
 ]
-const BAR_CELLS = 20                                    // bar width in cells
+const BAR_CELLS = 12                                    // bar width in cells
 const LABEL_WIDTH = 7                                   // label column width (stacked mode)
 ```
 
