@@ -7,8 +7,9 @@ import { join } from "node:path"
 
 const USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
 const REFRESH_MS = 60_000
-// Single-line layout ("Go 5h 1% · wk 2% · mo 51%") instead of the stacked
-// bar meter. Toggle if the stacked layout doesn't fit a narrow sidebar.
+// Single-line layout ("5h 1% · wk 2% · mo 51% ↻3h") instead of the
+// stacked bar rows. Toggle if the stacked layout doesn't fit a narrow
+// sidebar.
 const COMPACT = false
 // Recompute the reset countdowns this often so they stay accurate
 // between usage refreshes.

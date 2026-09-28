@@ -134,7 +134,9 @@ No browser cookies, no page scraping, no database. Nothing is sent anywhere exce
 
 ## Colors
 
-Each window's bar and percent value are colored by that window alone:
+Each window's bar and percent value are colored by that window alone. The unused portion of
+the bar is rendered as shade cells in that same color, so it reads as a deeper tone of the
+fill rather than a separate gray:
 
 | Color  | Condition       |
 | ------ | --------------- |
@@ -167,8 +169,8 @@ ever renames the Go provider ID, that's the one place to update.
 
 | Symptom                                  | Fix                                                                 |
 | ---------------------------------------- | ------------------------------------------------------------------- |
-| Banner never appears                     | Is OpenCode Go connected? Check `~/.local/share/opencode/auth.json` for an `opencode-go` entry. |
-| Banner disappears after switching models | Expected — it only renders while the session model is on Go.        |
+| Panel never appears                      | Is OpenCode Go connected? Check `~/.local/share/opencode/auth.json` for an `opencode-go` entry. |
+| Panel disappears after switching models  | Expected — it only renders while the session model is on Go.        |
 | Plugin shows as unsupported              | You're on OpenCode V1 (1.x). This plugin targets V2 only.           |
 | Percentages look stale                   | Values refresh every 60s and after each session run; the endpoint also reports whole percents. |
 | Plugin errors on startup                 | Check `~/.local/share/opencode/log/opencode.log`, filter for `role=cli`. |

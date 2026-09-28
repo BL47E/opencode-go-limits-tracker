@@ -49,8 +49,9 @@ bundled runtime — don't add imports that require `npm install`).
 
 Before opening a PR, confirm:
 
-- [ ] Banner renders ~5s after TUI start on an `opencode-go` session
-- [ ] Banner disappears when switching to a non-Go provider
+- [ ] Panel renders ~5s after TUI start on an `opencode-go` session
+- [ ] Rows show a solid fill on a dimmed same-hue track, plus percent and countdown (e.g., `52% 23d`)
+- [ ] Panel disappears when switching to a non-Go provider
 - [ ] No error in the opencode log after a run that fails to reach the endpoint (e.g., no network)
 
 ## Submitting
