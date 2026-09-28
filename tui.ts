@@ -7,10 +7,16 @@ import { join } from "node:path"
 
 const USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
 const REFRESH_MS = 60_000
+// Single-line layout ("Go 5h 1% · wk 2% · mo 51%") instead of the stacked
+// bar meter. Toggle if the stacked layout doesn't fit a narrow sidebar.
+const COMPACT = false
+// Recompute the reset countdowns this often so they stay accurate
+// between usage refreshes.
+const TICK_MS = 30_000
 const WINDOWS = [
-  ["rolling", "5-HOUR"],
-  ["weekly", "WEEKLY"],
-  ["monthly", "MONTHLY"],
+  { key: "rolling", label: "5-HOUR", compact: "5h" },
+  { key: "weekly", label: "WEEKLY", compact: "wk" },
+  { key: "monthly", label: "MONTHLY", compact: "mo" },
 ]
 const BAR_CELLS = 20
 const PARTIAL_STEPS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
@@ -64,6 +70,18 @@ function activeProvider(context, sessionID) {
   return fromSession ?? context.ui.model.current()?.providerID
 }
 
+function countdown(iso) {
+  if (!iso) return null
+  const ms = new Date(iso).getTime() - Date.now()
+  if (!Number.isFinite(ms)) return null
+  if (ms <= 0) return "now"
+  const minutes = Math.ceil(ms / 60_000)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `${hours}h`
+  return `${Math.round(hours / 24)}d`
+}
+
 export default Plugin.define({
   id: "go-usage.sidebar",
   setup(context) {
@@ -72,6 +90,7 @@ export default Plugin.define({
 
     const dispose = createRoot((rootDispose) => {
       const [usage, setUsage] = createSignal(null)
+      const [tick, setTick] = createSignal(0)
       const controller = new AbortController()
 
       const refresh = async () => {
@@ -82,10 +101,85 @@ export default Plugin.define({
 
       void refresh()
       const timer = setInterval(() => void refresh(), REFRESH_MS)
+      // Keep countdown text fresh between usage refreshes.
+      const tickTimer = setInterval(() => setTick((n) => n + 1), TICK_MS)
 
       try {
         context.data.on("session.execution.succeeded", () => void refresh())
       } catch {}
+
+      const resetText = (key) => {
+        void tick()
+        return countdown(usage()?.[key]?.resetsAt)
+      }
+
+      const stackedRow = (window) => {
+        return jsx("box", {
+          flexDirection: "row",
+          gap: 1,
+          children: [
+            jsx("box", {
+              width: LABEL_WIDTH,
+              height: 3,
+              justifyContent: "center",
+              alignItems: "flex-start",
+              children: [
+                jsx("text", {
+                  children: window.label,
+                  get fg() {
+                    return context.theme?.text?.muted
+                  },
+                }),
+              ],
+            }),
+            jsx("box", {
+              border: true,
+              width: BAR_CELLS + 2,
+              children: [
+                jsx("text", {
+                  get children() {
+                    return meter(usage()?.[window.key]?.percent)
+                  },
+                  get fg() {
+                    return colorFor(context.theme, usage()?.[window.key]?.percent)
+                  },
+                }),
+              ],
+            }),
+            jsx("text", {
+              get children() {
+                const pct = usage()?.[window.key]?.percent ?? "–"
+                const until = resetText(window.key) ?? ""
+                return `${pct}%${until ? ` ${until}` : ""}`
+              },
+              get fg() {
+                return colorFor(context.theme, usage()?.[window.key]?.percent)
+              },
+            }),
+          ],
+        })
+      }
+
+      const compactRow = (window, last) => {
+        return [
+          jsx("text", {
+            get children() {
+              return `${window.compact} ${usage()?.[window.key]?.percent ?? "–"}%`
+            },
+            get fg() {
+              return colorFor(context.theme, usage()?.[window.key]?.percent)
+            },
+          }),
+          jsx("text", {
+            get children() {
+              return last ? (resetText(window.key) ? `↻${resetText(window.key)}` : "") : "·"
+            },
+            get fg() {
+              return context.theme?.text?.muted
+            },
+          }),
+        ]
+      }
 
       context.ui.slot({
         append: "sidebar.footer",
@@ -102,6 +196,23 @@ export default Plugin.define({
                 paddingTop: 1,
                 gap: 1,
                 get children() {
+                  if (COMPACT) {
+                    return [
+                      jsx("text", {
+                        children: "Opencode Go",
+                        get fg() {
+                          return context.theme?.text?.base
+                        },
+                      }),
+                      jsx("box", {
+                        flexDirection: "row",
+                        gap: 1,
+                        children: WINDOWS.flatMap((window, i) =>
+                          compactRow(window, i === WINDOWS.length - 1),
+                        ),
+                      }),
+                    ]
+                  }
                   return [
                     jsx("text", {
                       children: "Opencode Go",
@@ -112,51 +223,7 @@ export default Plugin.define({
                     jsx("box", {
                       flexDirection: "column",
                       gap: 1,
-                      children: WINDOWS.map(([key, label]) => {
-                        const color = () => colorFor(context.theme, usage()?.[key]?.percent)
-                        return jsx("box", {
-                          flexDirection: "row",
-                          gap: 1,
-                          children: [
-                            jsx("box", {
-                              width: LABEL_WIDTH,
-                              height: 3,
-                              justifyContent: "center",
-                              alignItems: "flex-start",
-                              children: [
-                                jsx("text", {
-                                  children: label,
-                                  get fg() {
-                                    return context.theme?.text?.muted
-                                  },
-                                }),
-                              ],
-                            }),
-                            jsx("box", {
-                              border: true,
-                              width: BAR_CELLS + 2,
-                              children: [
-                                jsx("text", {
-                                  get children() {
-                                    return meter(usage()?.[key]?.percent)
-                                  },
-                                  get fg() {
-                                    return color()
-                                  },
-                                }),
-                              ],
-                            }),
-                            jsx("text", {
-                              get children() {
-                                return `${usage()?.[key]?.percent ?? "–"}%`
-                              },
-                              get fg() {
-                                return color()
-                              },
-                            }),
-                          ],
-                        })
-                      }),
+                      children: WINDOWS.map((window) => stackedRow(window)),
                     }),
                   ]
                 },
@@ -167,6 +234,7 @@ export default Plugin.define({
 
       onCleanup(() => {
         clearInterval(timer)
+        clearInterval(tickTimer)
         controller.abort()
       })
 
