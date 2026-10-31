@@ -1,11 +1,8 @@
 import { jsx } from "@opentui/solid/jsx-runtime"
 import { Show, createRoot, createSignal, onCleanup } from "solid-js"
 import { Plugin } from "@opencode/plugin/tui"
-import { readFileSync } from "node:fs"
-import { homedir } from "node:os"
-import { join } from "node:path"
+import { GoUsage } from "./rpc.js"
 
-const USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
 const REFRESH_MS = 60_000
 // Single-line layout ("5h 1% · wk 2% · mo 51% ↻3h") instead of the
 // stacked bar rows. Toggle if the stacked layout doesn't fit a narrow
@@ -22,28 +19,6 @@ const WINDOWS = [
 const BAR_CELLS = 12
 const PARTIAL_STEPS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
 const LABEL_WIDTH = 7
-
-function readGoKey() {
-  try {
-    const dataHome = process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share")
-    const auth = JSON.parse(readFileSync(join(dataHome, "opencode", "auth.json"), "utf8"))
-    const entry = auth?.["opencode-go"]
-    const key = typeof entry === "string" ? entry : entry?.key
-    return typeof key === "string" && key.length > 0 ? key : null
-  } catch {
-    return null
-  }
-}
-
-async function fetchUsage(apiKey, signal) {
-  const res = await fetch(USAGE_URL, {
-    headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
-    signal,
-  })
-  if (!res.ok) throw new Error(`usage endpoint returned ${res.status}`)
-  const data = await res.json()
-  return data?.usage ?? null
-}
 
 function meter(percent) {
   // Borderless omarchy-style bar: solid `█` fill on a `░` track, with a
@@ -86,17 +61,16 @@ function countdown(iso) {
 export default Plugin.define({
   id: "go-usage.sidebar",
   setup(context) {
-    const apiKey = readGoKey()
-    if (!apiKey) return
+    const goUsage = context.client.rpc(GoUsage)
 
     const dispose = createRoot((rootDispose) => {
       const [usage, setUsage] = createSignal(null)
       const [tick, setTick] = createSignal(0)
-      const controller = new AbortController()
 
       const refresh = async () => {
         try {
-          setUsage(await fetchUsage(apiKey, controller.signal))
+          const result = (await goUsage.getUsage({})) as { usage?: unknown }
+          setUsage((result?.usage as never) ?? null)
         } catch {}
       }
 
@@ -225,7 +199,6 @@ export default Plugin.define({
       onCleanup(() => {
         clearInterval(timer)
         clearInterval(tickTimer)
-        controller.abort()
       })
 
       return rootDispose
