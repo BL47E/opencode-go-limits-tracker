@@ -74,7 +74,20 @@ git clone https://github.com/BL47E/opencode-go-limits-tracker.git \
 
 Copy this folder to `~/.config/opencode/plugins/go-usage` (any method you like).
 
-### Option 3 — install from npm (once published)
+### Option 3 — reference a local checkout from `opencode.json` (no copy)
+
+Add your fork to the global config `~/.config/opencode/opencode.json`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    { "package": "file:///path/to/opencode-go-limits-tracker" }
+  ]
+}
+```
+
+### Option 4 — install from npm (once published)
 
 ```sh
 opencode plugin add opencode-go-limits-tracker
@@ -93,18 +106,31 @@ You should see `opencode-go-limits-tracker` listed with source `local`.
 
 ## Requirements
 
-- OpenCode **V2** (tested on 2.0.18). Uses the V2 CLI plugin API
-  (`Plugin.define` + `context.ui.slot`) — it will **not** load on V1 (1.x).
-- OpenCode Go connected in OpenCode (`/connect` → OpenCode Go, or any auth flow that stores
-  the `opencode-go` key in `~/.local/share/opencode/auth.json`).
+- OpenCode **V2** (tested on 2.0.18–2.2.5). Uses the V2 plugin API
+  (server `Plugin.define` + `ctx.rpc.register`, TUI `Plugin.define` + `context.ui.slot`
+  + `context.client.rpc`) — it will **not** load on V1 (1.x).
+- OpenCode Console connected in OpenCode (`/connect` → Console, creates an `opencode`
+  credential — stored in `~/.local/share/opencode/opencode.db`, table `credential`).
+  A legacy `opencode-go` API key is still supported as fallback.
 - A sidebar-capable terminal width (`session.sidebar` is `auto` by default; widen the window
   if the sidebar is hidden).
 
 ## How it works
 
-OpenCode stores your OpenCode Go API key locally in
-`~/.local/share/opencode/auth.json` (under the `opencode-go` entry). The plugin reads that key
-and calls the same JSON endpoint the OpenCode web console uses:
+The **server** part (`index.ts`) resolves auth through the official API —
+Console direct auth first, Go API key as fallback:
+
+```ts
+// 1. Default: Console OAuth (opencode integration)
+const connection = await ctx.integration.connection.active("opencode")
+const cred = await ctx.integration.connection.resolve(connection)
+// Bearer access + x-opencode-org-id, like OpenCode's own UsageLimits
+
+// 2. Fallback: legacy Go API key (opencode-go integration)
+const goConnection = await ctx.integration.connection.active("opencode-go")
+```
+
+It calls the same JSON endpoint the OpenCode web console uses:
 
 ```sh
 curl -s https://opencode.ai/zen/go/v1/usage \
@@ -129,8 +155,12 @@ Response shape:
 - `monthly` → resets on your billing-cycle anchor date
 - `resetsAt` on each window → shown next to the percent as a countdown (`3h12m`, `3d`, `21d`)
 
-No browser cookies, no page scraping, no database. Nothing is sent anywhere except to
-`opencode.ai`, and the key never leaves your machine.
+The result is exposed over RPC (`rpc.ts`, `GoUsage.getUsage`), and the **TUI** part (`tui.ts`)
+polls it via `context.client.rpc(GoUsage).getUsage({})` every 60s and after each session run.
+The raw key/token stays server-side — the TUI only ever sees the parsed `usage` object.
+
+No browser cookies, no page scraping, no `auth.json` parsing. Nothing is sent anywhere except to
+`opencode.ai`, and secrets never leave your machine.
 
 ## Colors
 
@@ -146,10 +176,17 @@ fill rather than a separate gray:
 
 ## Configuration
 
-There are no required options. The constants at the top of `tui.ts` are easy to tweak:
+There are no required options. The constants are split by layer:
+
+`index.ts` (server):
 
 ```ts
 const USAGE_URL = "https://opencode.ai/zen/go/v1/usage" // data source
+```
+
+`tui.ts` (display):
+
+```ts
 const REFRESH_MS = 60_000                               // usage refresh interval
 const COMPACT = false                                   // true = one-line layout
 const TICK_MS = 30_000                                  // countdown recompute interval
@@ -169,11 +206,11 @@ ever renames the Go provider ID, that's the one place to update.
 
 | Symptom                                  | Fix                                                                 |
 | ---------------------------------------- | ------------------------------------------------------------------- |
-| Panel never appears                      | Is OpenCode Go connected? Check `~/.local/share/opencode/auth.json` for an `opencode-go` entry. |
+| Panel never appears                      | Is OpenCode Go connected? Test `opencode api post /api/rpc/go-usage/getUsage --data '{"location":{"directory":"."},"input":{}}'` — `no_auth` means reconnect via `/connect`. |
 | Panel disappears after switching models  | Expected — it only renders while the session model is on Go.        |
 | Plugin shows as unsupported              | You're on OpenCode V1 (1.x). This plugin targets V2 only.           |
 | Percentages look stale                   | Values refresh every 60s and after each session run; the endpoint also reports whole percents. |
-| Plugin errors on startup                 | Check `~/.local/share/opencode/log/opencode.log`, filter for `role=cli`. |
+| Plugin errors on startup                 | Check `~/.local/share/opencode/log/opencode.log`: `rpc=go-usage` (`role=server`) for key/fetch failures, `go-usage.sidebar` (`role=cli`) for display errors. |
 
 ## Removing
 
@@ -184,6 +221,18 @@ rm -rf ~/.config/opencode/plugins/go-usage
 Then restart the TUI.
 
 ## Publishing notes (for maintainers)
+
+`package.json` exposes all three entrypoints:
+
+```json
+{
+  "exports": {
+    ".": "./index.ts",
+    "./rpc": "./rpc.ts",
+    "./tui": "./tui.ts"
+  }
+}
+```
 
 The npm-required peers are already declared in `package.json`:
 

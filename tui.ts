@@ -1,11 +1,8 @@
 import { jsx } from "@opentui/solid/jsx-runtime"
 import { Show, createRoot, createSignal, onCleanup } from "solid-js"
 import { Plugin } from "@opencode/plugin/tui"
-import { readFileSync } from "node:fs"
-import { homedir } from "node:os"
-import { join } from "node:path"
+import { GoUsage } from "./rpc.js"
 
-const USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
 const REFRESH_MS = 60_000
 // Single-line layout ("5h 1% · wk 2% · mo 51% ↻3h") instead of the
 // stacked bar rows. Toggle if the stacked layout doesn't fit a narrow
@@ -15,48 +12,26 @@ const COMPACT = false
 // between usage refreshes.
 const TICK_MS = 30_000
 const WINDOWS = [
-  { key: "rolling", label: "5-HOUR", compact: "5h" },
-  { key: "weekly", label: "WEEKLY", compact: "wk" },
-  { key: "monthly", label: "MONTHLY", compact: "mo" },
+  { key: "rolling", label: "Rolling", compact: "5h" },
+  { key: "weekly", label: "Weekly", compact: "wk" },
+  { key: "monthly", label: "Monthly", compact: "mo" },
 ]
-const BAR_CELLS = 12
+const BAR_CELLS = 20
 const PARTIAL_STEPS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
 const LABEL_WIDTH = 7
 
-function readGoKey() {
-  try {
-    const dataHome = process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share")
-    const auth = JSON.parse(readFileSync(join(dataHome, "opencode", "auth.json"), "utf8"))
-    const entry = auth?.["opencode-go"]
-    const key = typeof entry === "string" ? entry : entry?.key
-    return typeof key === "string" && key.length > 0 ? key : null
-  } catch {
-    return null
-  }
-}
-
-async function fetchUsage(apiKey, signal) {
-  const res = await fetch(USAGE_URL, {
-    headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
-    signal,
-  })
-  if (!res.ok) throw new Error(`usage endpoint returned ${res.status}`)
-  const data = await res.json()
-  return data?.usage ?? null
-}
-
-function meter(percent) {
-  // Borderless omarchy-style bar: solid `█` fill on a `░` track, with a
-  // stepped partial-block character at the fill frontier so the edge
-  // resolves finer than one cell. Fill and track share one text node and
-  // one fg color — the shade glyphs read as a deeper tone of the fill.
+function meterParts(percent) {
+  // Partial edge kept with exactly two inks: the track glyph uses the band
+  // color as its foreground, so the band reads uniform and the partial's
+  // void matches the track exactly.
   const cells = ((percent ?? 0) / 100) * BAR_CELLS
   const full = Math.floor(cells)
   const rem = cells - full
   const step = rem > 0 ? Math.max(1, Math.round(rem * (PARTIAL_STEPS.length - 1))) : 0
-  return "█".repeat(full) +
-    (step ? PARTIAL_STEPS[step] : "") +
-    "░".repeat(Math.max(0, BAR_CELLS - full - (step ? 1 : 0)))
+  return {
+    filled: "█".repeat(full) + (step ? PARTIAL_STEPS[step] : ""),
+    track: "░".repeat(Math.max(0, BAR_CELLS - full - (step ? 1 : 0))),
+  }
 }
 
 function colorFor(theme, percent) {
@@ -67,8 +42,9 @@ function colorFor(theme, percent) {
 }
 
 function activeProvider(context, sessionID) {
-  const fromSession = context.data.session.get(sessionID)?.model?.providerID
-  return fromSession ?? context.ui.model.current()?.providerID
+  const fromUI = context.ui.model.current()?.providerID
+  if (fromUI) return fromUI
+  return context.data.session.get(sessionID)?.model?.providerID
 }
 
 function countdown(iso) {
@@ -79,24 +55,30 @@ function countdown(iso) {
   const minutes = Math.ceil(ms / 60_000)
   if (minutes < 60) return `${minutes}m`
   const hours = Math.floor(minutes / 60)
-  if (hours < 48) return `${hours}h`
-  return `${Math.round(hours / 24)}d`
+  if (hours < 24) {
+    const remMin = minutes % 60
+    return remMin ? `${hours}h${remMin}m` : `${hours}h`
+  }
+  const days = Math.floor(hours / 24)
+  const remHours = hours % 24
+  return remHours ? `${days}d${remHours}h` : `${days}d`
 }
 
 export default Plugin.define({
   id: "go-usage.sidebar",
   setup(context) {
-    const apiKey = readGoKey()
-    if (!apiKey) return
+    const goUsage = context.client.rpc(GoUsage)
 
     const dispose = createRoot((rootDispose) => {
       const [usage, setUsage] = createSignal(null)
+      const [usageURL, setUsageURL] = createSignal<string | null>(null)
       const [tick, setTick] = createSignal(0)
-      const controller = new AbortController()
 
       const refresh = async () => {
         try {
-          setUsage(await fetchUsage(apiKey, controller.signal))
+          const result = (await goUsage.getUsage({})) as { usage?: unknown; usageURL?: unknown }
+          setUsage((result?.usage as never) ?? null)
+          setUsageURL(typeof result?.usageURL === "string" ? result.usageURL : null)
         } catch {}
       }
 
@@ -114,37 +96,97 @@ export default Plugin.define({
         return countdown(usage()?.[key]?.resetsAt)
       }
 
-      const stackedRow = (window) => {
-        return jsx("box", {
-          flexDirection: "row",
-          gap: 1,
-          children: [
-            jsx("box", {
-              width: LABEL_WIDTH,
-              children: jsx("text", {
-                children: window.label,
+      const urlRow = () => {
+        return jsx(Show, {
+          get when() {
+            return usageURL()
+          },
+          get children() {
+            return jsx("text", {
+              children: jsx("a", {
+                get href() {
+                  return usageURL() as string
+                },
                 get fg() {
                   return context.theme?.text?.muted
                 },
+                children: "↗ Console",
               }),
+            })
+          },
+        })
+      }
+
+      const stackedRow = (window) => {
+        return jsx("box", {
+          flexDirection: "column",
+          children: [
+            jsx("box", {
+              flexDirection: "row",
+              gap: 1,
+              children: [
+                jsx("box", {
+                  width: LABEL_WIDTH,
+                  children: jsx("text", {
+                    children: window.label,
+                    get fg() {
+                      return context.theme?.text?.muted
+                    },
+                  }),
+                }),
+                jsx("box", {
+                  flexDirection: "row",
+                  children: [
+                    jsx("text", {
+                      get children() {
+                        return meterParts(usage()?.[window.key]?.percent).filled
+                      },
+                      get fg() {
+                        return colorFor(context.theme, usage()?.[window.key]?.percent)
+                      },
+                      get bg() {
+                        return context.theme?.border?.base ?? context.theme?.text?.muted
+                      },
+                    }),
+                    jsx("text", {
+                      get children() {
+                        return meterParts(usage()?.[window.key]?.percent).track
+                      },
+                      get fg() {
+                        return colorFor(context.theme, usage()?.[window.key]?.percent)
+                      },
+                    }),
+                  ],
+                }),
+                jsx("text", {
+                  get children() {
+                    const pct = usage()?.[window.key]?.percent ?? "–"
+                    return `${pct}% used`
+                  },
+                  get fg() {
+                    return colorFor(context.theme, usage()?.[window.key]?.percent)
+                  },
+                }),
+              ],
             }),
-            jsx("text", {
-              get children() {
-                return meter(usage()?.[window.key]?.percent)
-              },
-              get fg() {
-                return colorFor(context.theme, usage()?.[window.key]?.percent)
-              },
-            }),
-            jsx("text", {
-              get children() {
-                const pct = usage()?.[window.key]?.percent ?? "–"
-                const until = resetText(window.key) ?? ""
-                return `${pct}%${until ? ` ${until}` : ""}`
-              },
-              get fg() {
-                return colorFor(context.theme, usage()?.[window.key]?.percent)
-              },
+            jsx("box", {
+              flexDirection: "row",
+              gap: 1,
+              children: [
+                jsx("box", {
+                  width: LABEL_WIDTH,
+                  children: [],
+                }),
+                jsx("text", {
+                  get children() {
+                    const until = resetText(window.key) ?? ""
+                    return until ? `Resets in ${until}` : ""
+                  },
+                  get fg() {
+                    return context.theme?.text?.muted
+                  },
+                }),
+              ],
             }),
           ],
         })
@@ -181,6 +223,25 @@ export default Plugin.define({
             get children() {
               return jsx("box", {
                 flexDirection: "column",
+                border: ["top"],
+                get borderColor() {
+                  return context.theme?.background?.base ?? "#000000"
+                },
+                customBorderChars: {
+                  topLeft: "█",
+                  topRight: "█",
+                  bottomLeft: "█",
+                  bottomRight: "█",
+                  horizontal: "█",
+                  vertical: "█",
+                  topT: "█",
+                  bottomT: "█",
+                  leftT: "█",
+                  rightT: "█",
+                  cross: "█",
+                },
+                marginLeft: -2,
+                marginRight: -2,
                 paddingLeft: 1,
                 paddingRight: 1,
                 paddingTop: 1,
@@ -201,6 +262,7 @@ export default Plugin.define({
                           compactRow(window, i === WINDOWS.length - 1),
                         ),
                       }),
+                      urlRow(),
                     ]
                   }
                   return [
@@ -215,6 +277,7 @@ export default Plugin.define({
                       gap: 1,
                       children: WINDOWS.map((window) => stackedRow(window)),
                     }),
+                    urlRow(),
                   ]
                 },
               })
@@ -225,7 +288,6 @@ export default Plugin.define({
       onCleanup(() => {
         clearInterval(timer)
         clearInterval(tickTimer)
-        controller.abort()
       })
 
       return rootDispose
