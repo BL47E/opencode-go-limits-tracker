@@ -5,6 +5,7 @@
   "description": "Track your OpenCode Go plan limits (5h, weekly, monthly) live in the OpenCode V2 sidebar",
   "exports": {
     ".": "./index.ts",
+    "./rpc": "./rpc.ts",
     "./tui": "./tui.ts"
   },
   "keywords": [
